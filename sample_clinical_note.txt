@@ -1,0 +1,27 @@
+Synthetic Clinical Prior Authorization Note
+
+For software testing only. This is synthetic data and is not a real patient record.
+
+Patient Name: Jordan Smith
+Date of Birth: 04/12/1978
+Member ID: SYN-445912
+Phone: (312) 555-0198
+Email: jordan.smith@example.com
+
+Clinical Summary:
+Patient has a documented history of severe rheumatoid arthritis with persistent joint pain, morning stiffness, and reduced mobility. Symptoms have continued despite conservative therapy and standard disease-modifying treatment.
+
+Medication Requested:
+Adalimumab 40 mg subcutaneous injection every two weeks. Prior authorization is requested for a 12-month treatment period.
+
+Previous Therapies Tried:
+Methotrexate was used for 6 months with incomplete response. Hydroxychloroquine was discontinued due to intolerance. NSAIDs provided partial symptom relief but did not control inflammatory markers.
+
+Medical Necessity:
+The requested biologic therapy is clinically appropriate because the patient has moderate to severe disease activity, inadequate response to first-line treatment, and functional limitation affecting daily activities.
+
+Supporting Evidence:
+Recent labs show elevated CRP and ESR. Provider notes document active synovitis in multiple joints. Imaging notes describe erosive changes consistent with inflammatory arthritis.
+
+Decision Support Notes:
+The review assistant should identify diagnosis, requested drug, failed prior therapies, duration, rationale, and missing documentation. It should not expose personal contact details in generated summaries.

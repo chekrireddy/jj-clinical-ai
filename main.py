@@ -1,11 +1,15 @@
 from pathlib import Path
 from uuid import uuid4
+import os
 import re
 import shutil
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from pypdf import PdfReader
 
+
+load_dotenv()
 
 app = FastAPI(
     title="Clinical Document Intelligence API",
@@ -16,6 +20,22 @@ UPLOAD_FOLDER = Path("uploads")
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
 ALLOWED_FILE_TYPES = {".pdf", ".txt"}
+
+API_KEY = os.getenv("API_KEY")
+
+
+def verify_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    if not API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="API key is not configured on the server"
+        )
+
+    if x_api_key != API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key"
+        )
 
 
 def extract_text_from_file(file_path: Path) -> str:
@@ -85,7 +105,12 @@ def health_check():
 
 
 @app.post("/upload")
-def upload_document(file: UploadFile = File(...)):
+def upload_document(
+    file: UploadFile = File(...),
+    x_api_key: str | None = Header(default=None)
+):
+    verify_api_key(x_api_key)
+
     original_filename = file.filename
 
     if not original_filename:

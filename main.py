@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
-import json
 import os
 import re
 import shutil
@@ -22,12 +21,12 @@ app = FastAPI(
 UPLOAD_FOLDER = Path("uploads")
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
-DOCUMENTS_FILE = Path("documents.json")
 ALLOWED_FILE_TYPES = {".pdf", ".txt"}
 
 API_KEY = os.getenv("API_KEY")
 AWS_REGION = os.getenv("AWS_REGION")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+DYNAMODB_TABLE_NAME = os.getenv("DYNAMODB_TABLE_NAME")
 
 s3_client = boto3.client(
     "s3",
@@ -36,6 +35,15 @@ s3_client = boto3.client(
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
 )
 
+dynamodb = boto3.resource(
+    "dynamodb",
+    region_name=AWS_REGION,
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+)
+
+documents_table = dynamodb.Table(DYNAMODB_TABLE_NAME)
+
 
 def verify_api_key(x_api_key: str | None = Header(default=None)) -> None:
     if not API_KEY:
@@ -43,20 +51,6 @@ def verify_api_key(x_api_key: str | None = Header(default=None)) -> None:
 
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
-
-
-def load_documents() -> list[dict]:
-    if not DOCUMENTS_FILE.exists():
-        return []
-
-    return json.loads(DOCUMENTS_FILE.read_text(encoding="utf-8"))
-
-
-def save_documents(documents: list[dict]) -> None:
-    DOCUMENTS_FILE.write_text(
-        json.dumps(documents, indent=2),
-        encoding="utf-8",
-    )
 
 
 def extract_text_from_file(file_path: Path) -> str:
@@ -124,20 +118,30 @@ def health_check():
 @app.get("/documents")
 def get_documents(x_api_key: str | None = Header(default=None)):
     verify_api_key(x_api_key)
-    return {"documents": load_documents()}
+
+    response = documents_table.scan()
+
+    return {
+        "documents": response.get("Items", [])
+    }
 
 
 @app.get("/documents/{document_id}")
 def get_document(document_id: str, x_api_key: str | None = Header(default=None)):
     verify_api_key(x_api_key)
 
-    documents = load_documents()
+    response = documents_table.get_item(
+        Key={
+            "document_id": document_id
+        }
+    )
 
-    for document in documents:
-        if document["document_id"] == document_id:
-            return document
+    document = response.get("Item")
 
-    raise HTTPException(status_code=404, detail="Document not found")
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return document
 
 
 @app.post("/upload")
@@ -149,6 +153,9 @@ def upload_document(
 
     if not S3_BUCKET_NAME:
         raise HTTPException(status_code=500, detail="S3 bucket name is not configured")
+
+    if not DYNAMODB_TABLE_NAME:
+        raise HTTPException(status_code=500, detail="DynamoDB table name is not configured")
 
     original_filename = file.filename
 
@@ -197,12 +204,10 @@ def upload_document(
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    documents = load_documents()
-    documents.append(metadata)
-    save_documents(documents)
+    documents_table.put_item(Item=metadata)
 
     return {
-        "message": "Document uploaded to S3 and metadata saved successfully",
+        "message": "Document uploaded to S3 and metadata saved in DynamoDB successfully",
         **metadata,
         "redacted_preview": redacted_text[:500],
         "first_chunk": chunks[0] if chunks else "",
